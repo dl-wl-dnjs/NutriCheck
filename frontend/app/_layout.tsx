@@ -27,7 +27,6 @@ function ThemedStack() {
         <Stack.Screen
           name="scan"
           options={{
-            presentation: Platform.OS === 'ios' ? 'fullScreenModal' : 'modal',
             animation: 'slide_from_bottom',
           }}
         />

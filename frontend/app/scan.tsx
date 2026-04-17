@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  InputAccessoryView,
   Keyboard,
   Platform,
   Pressable,
@@ -40,6 +41,11 @@ const CORNER_RADIUS = 12;
 function normalizeBarcode(input: string): string {
   return input.replace(/\D/g, '');
 }
+
+// iOS shows a "Done" accessory bar above the number pad by default because the
+// numeric keyboard has no return key. We reference an empty InputAccessoryView
+// so that bar doesn't render (on Android this ID is simply ignored).
+const NO_ACCESSORY_ID = 'barcode-no-accessory';
 
 function isValidUpc(input: string): boolean {
   const digits = normalizeBarcode(input);
@@ -186,7 +192,7 @@ export default function ScanScreen() {
         if (e instanceof ApiError && e.status === 404) {
           Alert.alert(
             'Product not found',
-            'Product not in database — try manual entry.',
+            'Product not in database. Try manual entry.',
             [{ text: 'OK', onPress: restartScanning }],
           );
           return;
@@ -297,7 +303,7 @@ export default function ScanScreen() {
         </Animated.Text>
       </View>
 
-      <View style={[styles.topbar, { top: insets.top + 12 }]}>
+      <View style={[styles.topbar, { top: Math.max(insets.top / 2, 6) }]}>
         <ToolbarButton onPress={() => router.back()}>
           <X size={16} color="#FFFFFF" strokeWidth={2.5} />
         </ToolbarButton>
@@ -371,6 +377,7 @@ export default function ScanScreen() {
                   returnKeyType="done"
                   maxLength={13}
                   autoFocus
+                  inputAccessoryViewID={Platform.OS === 'ios' ? NO_ACCESSORY_ID : undefined}
                   style={styles.input}
                 />
                 <Pressable
@@ -401,10 +408,30 @@ export default function ScanScreen() {
                   )}
                 </Pressable>
               </View>
+              <Pressable
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setSheetExpanded(false);
+                  // Swap the scanner for the Search tab in one motion so the
+                  // transition feels like a horizontal slide rather than a
+                  // modal dismiss followed by a separate tab change.
+                  router.replace('/(tabs)/search');
+                }}
+                hitSlop={8}
+                style={styles.sheetNameSearch}
+              >
+                <Text style={styles.sheetNameSearchText}>or search by product name →</Text>
+              </Pressable>
             </View>
           </View>
         )}
       </Animated.View>
+
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={NO_ACCESSORY_ID}>
+          <View style={{ height: 0 }} />
+        </InputAccessoryView>
+      ) : null}
     </View>
   );
 }
@@ -611,6 +638,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#FF453A',
     marginBottom: 10,
+  },
+  sheetNameSearch: {
+    alignSelf: 'center',
+    marginTop: 14,
+    paddingVertical: 4,
+  },
+  sheetNameSearchText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#34D399',
   },
   formRow: {
     flexDirection: 'row',
