@@ -67,13 +67,9 @@ its copy accordingly. Works in light and dark mode out of the box.
 <div align="center">
   <table>
     <tr>
-      <td align="center" width="50%">
+      <td align="center" width="100%">
         <img src="frontend/assets/screenshots/profile-light.png" alt="Health profile (light)" width="280"><br>
         <sub>Manage health profile — Light</sub>
-      </td>
-      <td align="center" width="50%">
-        <img src="frontend/assets/screenshots/profile-dark.png" alt="Health profile (dark)" width="280"><br>
-        <sub>Manage health profile — Dark</sub>
       </td>
     </tr>
   </table>
@@ -249,6 +245,5 @@ clinician for medical, dietary, or allergy decisions.
   <img alt="NutriCheck" src="frontend/assets/logo/icon-light.png" width="64">
 </picture>
 
-<sub>Made with care by <a href="https://github.com/brianmmaina">@brianmmaina</a></sub>
 
 </div>
