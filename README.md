@@ -8,7 +8,7 @@
 
 ### Scan. Understand. Eat better.
 
-A mobile app that turns a barcode into a clear, personalized read on what you're about to eat —
+A mobile app that turns a barcode into a clear, personalized read on what you're about to eat
 nutrition score, flagged ingredients for your health profile, and better alternatives on the shelf.
 
 <p>
