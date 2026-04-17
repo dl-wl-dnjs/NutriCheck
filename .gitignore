@@ -1,0 +1,23 @@
+# Python / backend
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environment
+.env
+backend/.env
+frontend/.env
+
+# Node / Expo
+node_modules/
+.expo/
+frontend/.expo/
+frontend/node_modules/
+
+# Logs & OS
+*.log
+.DS_Store
+
+# Local tooling
+scripts/drip-commit/

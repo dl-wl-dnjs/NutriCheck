@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nutricheck
+      POSTGRES_PASSWORD: nutricheck
+      POSTGRES_DB: nutricheck
+    ports:
+      - "5433:5432"
+    volumes:
+      - nutricheck_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nutricheck -d nutricheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      # Inside the compose network the DB hostname is `postgres` on its native
+      # port 5432 — the host-port 5433 mapping above is only for tools on the
+      # host machine.
+      DATABASE_URL: postgresql+psycopg2://nutricheck:nutricheck@postgres:5432/nutricheck
+      CORS_ORIGINS: "http://localhost:8081,http://127.0.0.1:8081,http://localhost:19006,*"
+      USDA_FOODDATA_API_KEY: "${USDA_FOODDATA_API_KEY:-DEMO_KEY}"
+      OPENFOODFACTS_USER_AGENT: "NutriCheck/1.0 (local development)"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    # Bind to 0.0.0.0 so a physical iPhone on the same Wi-Fi can reach the API
+    # at http://<your-mac-LAN-IP>:8000.
+    restart: unless-stopped
+
+volumes:
+  nutricheck_pgdata:

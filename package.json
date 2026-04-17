@@ -1,0 +1,13 @@
+{
+  "name": "nutricheck",
+  "private": true,
+  "scripts": {
+    "start": "npm --prefix frontend run start",
+    "web": "npm --prefix frontend run web",
+    "android": "npm --prefix frontend run android",
+    "ios": "npm --prefix frontend run ios",
+    "start:device": "npm --prefix frontend run start:device",
+    "install:frontend": "npm --prefix frontend install",
+    "backend": "docker compose up"
+  }
+}
