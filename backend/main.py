@@ -12,6 +12,7 @@ from backend.routers import (
     profile,
     scan,
     scan_legacy,
+    search,
     users,
 )
 from backend.schema_upgrade import apply_postgres_column_patches
@@ -37,6 +38,7 @@ app.add_middleware(
 app.include_router(profile.router)
 app.include_router(scan.router)
 app.include_router(alternatives.router)
+app.include_router(search.router)
 
 # Legacy endpoints (kept until frontend migration completes):
 #   /api/health-profile/*, /api/scan/barcode, /api/scan/history,
