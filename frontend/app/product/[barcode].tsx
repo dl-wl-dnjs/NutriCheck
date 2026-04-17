@@ -472,7 +472,7 @@ export default function ProductResultsScreen() {
             lineHeight: 18,
           }}
         >
-          Informational only — not medical advice.
+          Informational only. Not medical advice.
         </Text>
       </ScrollView>
     </SafeAreaView>

@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 28,
+    paddingTop: 14,
     paddingBottom: 22,
   },
   scanHero: {

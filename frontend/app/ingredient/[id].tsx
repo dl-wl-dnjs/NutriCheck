@@ -228,7 +228,7 @@ export default function IngredientDetailScreen() {
           >
             {meta.safe
               ? 'This ingredient aligns with your current health profile.'
-              : `Flagged based on your health profile — tap back to see other ingredients in this product.`}
+              : `Flagged based on your health profile. Tap back to see other ingredients in this product.`}
           </Text>
         </View>
 
@@ -250,7 +250,7 @@ export default function IngredientDetailScreen() {
             lineHeight: 18,
           }}
         >
-          Informational only — not medical advice.
+          Informational only. Not medical advice.
         </Text>
       </ScrollView>
     </SafeAreaView>
