@@ -31,6 +31,9 @@ def get_or_create_product(db: Session, barcode: str) -> Product | None:
         ingredients_text=normalized.get("ingredients_text"),
         nutriments=normalized.get("nutriments"),
         simplified_summary=normalized.get("simplified_summary"),
+        allergen_statement=normalized.get("allergen_statement"),
+        allergens_tags=normalized.get("allergens_tags"),
+        traces_tags=normalized.get("traces_tags"),
         limited_data=bool(normalized.get("limited_data")),
         source=normalized.get("source", "unknown"),
     )
