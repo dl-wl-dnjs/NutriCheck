@@ -1,4 +1,4 @@
-"""Personalized health score and warnings (FR-7, FR-8, FR-9)."""
+"""Legacy rating adapter — delegates to ``scoring.evaluate`` for one canonical model."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any
 
 from backend.models.health_profile import HealthProfile
 from backend.models.product import Product
+from backend.services import scoring
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ def _nutrient_float(nutriments: dict[str, Any] | None, key: str) -> float | None
 
 
 def _score_from_nutrients(nutriments: dict[str, Any] | None, fitness_goal: str) -> tuple[int, list[str]]:
+    """Kept for unit tests; new code should use ``scoring.evaluate`` directly."""
     warnings: list[str] = []
     score = 80
     sodium = _nutrient_float(nutriments, "sodium_100g") or _nutrient_float(nutriments, "salt_100g")
@@ -72,55 +74,12 @@ def _score_from_nutrients(nutriments: dict[str, Any] | None, fitness_goal: str) 
 
 
 def evaluate_product(profile: HealthProfile, product: Product) -> RatingResult:
-    allergens = [str(a).lower().strip() for a in (profile.allergens or []) if str(a).strip()]
-    ingredients = (product.ingredients_text or "").lower()
-    limited = bool(product.limited_data)
-
-    for allergen in allergens:
-        if not allergen:
-            continue
-        if allergen in ingredients or _token_match(ingredients, allergen):
-            return RatingResult(
-                score=0,
-                label="AVOID",
-                avoid=True,
-                avoid_reason=f"Flagged ingredient or allergen match: {allergen}",
-                warnings=["AVOID: ingredient may conflict with your saved allergens."],
-                limited_information=limited,
-            )
-
-    warnings: list[str] = []
-    if limited:
-        warnings.append("Limited information available for this product.")
-
-    base_score, nutrient_warnings = _score_from_nutrients(product.nutriments or {}, profile.fitness_goal)
-    warnings.extend(nutrient_warnings)
-
-    conditions = [str(c).lower() for c in (profile.health_conditions or [])]
-    if "hypertension" in " ".join(conditions) or "high blood pressure" in " ".join(conditions):
-        sodium = _nutrient_float(product.nutriments, "sodium_100g")
-        if sodium is not None and sodium > 0.6:
-            warnings.append("Sodium may be high for hypertension-related goals.")
-
-    score = base_score
-    if score >= 80:
-        label = "Excellent"
-    elif score >= 60:
-        label = "Good"
-    else:
-        label = "Poor"
-
+    s = scoring.evaluate(profile, product)
     return RatingResult(
-        score=score,
-        label=label,
-        avoid=False,
-        avoid_reason=None,
-        warnings=warnings,
-        limited_information=limited,
+        score=s.score,
+        label=s.label,
+        avoid=s.avoid,
+        avoid_reason=s.avoid_reason,
+        warnings=list(s.warnings),
+        limited_information=s.limited_information,
     )
-
-
-def _token_match(haystack: str, needle: str) -> bool:
-    if len(needle) < 3:
-        return False
-    return needle in haystack
