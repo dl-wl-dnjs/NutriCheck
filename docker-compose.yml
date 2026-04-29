@@ -19,14 +19,14 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    # Load the same vars as local uvicorn (USDA, Supabase JWKS, CORS, user-agent).
+    # `environment` below overrides `DATABASE_URL` so the container never uses
+    # 127.0.0.1:5433 (that would point at the container itself, not Postgres).
+    env_file:
+      - path: backend/.env
+        required: false
     environment:
-      # Inside the compose network the DB hostname is `postgres` on its native
-      # port 5432 — the host-port 5433 mapping above is only for tools on the
-      # host machine.
       DATABASE_URL: postgresql+psycopg2://nutricheck:nutricheck@postgres:5432/nutricheck
-      CORS_ORIGINS: "http://localhost:8081,http://127.0.0.1:8081,http://localhost:19006,*"
-      USDA_FOODDATA_API_KEY: "${USDA_FOODDATA_API_KEY:-DEMO_KEY}"
-      OPENFOODFACTS_USER_AGENT: "NutriCheck/1.0 (local development)"
     depends_on:
       postgres:
         condition: service_healthy
