@@ -8,8 +8,7 @@
 
 ### Scan. Understand. Eat better.
 
-A mobile app that turns a barcode into a clear, personalized read on what you're about to eat
-nutrition score, flagged ingredients for your health profile, and better alternatives on the shelf.
+A mobile app that turns a barcode into a clear, personalized read on what you're about to eat with nutrition score, flagged ingredients for your health profile, and better alternatives.
 
 <p>
   <img alt="Expo" src="https://img.shields.io/badge/Expo-55-000?logo=expo&logoColor=white">
@@ -67,9 +66,13 @@ its copy accordingly. Works in light and dark mode out of the box.
 <div align="center">
   <table>
     <tr>
-      <td align="center" width="100%">
+      <td align="center" width="50%">
         <img src="frontend/assets/screenshots/profile-light.png" alt="Health profile (light)" width="280"><br>
         <sub>Manage health profile — Light</sub>
+      </td>
+      <td align="center" width="50%">
+        <img src="frontend/assets/screenshots/profile-dark.png" alt="Health profile (dark)" width="280"><br>
+        <sub>Manage health profile — Dark</sub>
       </td>
     </tr>
   </table>
@@ -170,13 +173,28 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```bash
 cd frontend
 npm install
-cp .env.example .env    # point EXPO_PUBLIC_API_BASE_URL at your API
+cp .env.example .env    # point EXPO_PUBLIC_API_URL at your API
 npm start               # Expo dev server
 # or: npm run ios / npm run android / npm run web
 ```
 
-To run on a physical iPhone on the same Wi-Fi, set `EXPO_PUBLIC_API_BASE_URL`
+To run on a physical iPhone on the same Wi-Fi, set `EXPO_PUBLIC_API_URL`
 to `http://<your-mac-LAN-IP>:8000` and use `npm run start:device`.
+
+### Authentication (Supabase, Clerk, or dev)
+
+The app and API pick an auth mode by **precedence** so you can run managed sign-in or the legacy
+dev user without changing code.
+
+**Frontend** (`frontend/.env`): first match wins — **Supabase** if both `EXPO_PUBLIC_SUPABASE_URL`
+and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are set; else **Clerk** if `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`
+is set; else **dev UUID** from `EXPO_PUBLIC_DEV_USER_ID` (see `frontend/.env.example`).
+
+**Backend** (`backend/.env`): first match wins — **Supabase** if `SUPABASE_JWKS_URL` is set (full
+URL to `…/auth/v1/.well-known/jwks.json`); else **Clerk** if `CLERK_JWKS_URL` is set; else the
+bearer must be a **UUID** string for local dev. When verifying Supabase tokens, the API maps JWT
+`sub` into `users.auth_sub` (same as Clerk). If you only want one provider locally, **unset** the
+other provider’s keys so precedence does not accidentally mix modes.
 
 ## Project layout
 
@@ -245,5 +263,6 @@ clinician for medical, dietary, or allergy decisions.
   <img alt="NutriCheck" src="frontend/assets/logo/icon-light.png" width="64">
 </picture>
 
+<sub>Made with care by <a href="https://github.com/brianmmaina">@brianmmaina</a></sub>
 
 </div>
