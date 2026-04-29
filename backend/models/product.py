@@ -23,6 +23,10 @@ class Product(Base):
     # Open Food Facts categories_tags (e.g. ["en:spreads", "en:chocolate-spreads"]). Used to
     # shortlist candidate products for the /alternatives/{product_id} endpoint.
     categories_tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Open Food Facts declared allergens (often absent from free-text ingredients alone).
+    allergen_statement: Mapped[str | None] = mapped_column(Text, nullable=True)
+    allergens_tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    traces_tags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     limited_data: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
