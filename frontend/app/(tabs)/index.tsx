@@ -27,8 +27,8 @@ import { Logo } from '../../components/Logo';
 import { RecentScansSkeleton } from '../../components/RecentScansSkeleton';
 import { useAuth } from '../../context/AuthContext';
 import { useScreenTokens } from '../../hooks/useScreenTokens';
-import { useProfile } from '../lib/hooks/useProfile';
-import { useScanHistory } from '../lib/hooks/useScanHistory';
+import { useProfile } from '../../lib/hooks/useProfile';
+import { useScanHistory } from '../../lib/hooks/useScanHistory';
 
 type IconType = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
@@ -87,7 +87,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const C = useScreenTokens();
   const insets = useSafeAreaInsets();
-  const { userId } = useAuth();
+  const { userId, authMode, isLoaded } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
   const profileQuery = useProfile(userId);
@@ -175,6 +175,30 @@ export default function HomeScreen() {
           />
         }
       >
+        {isLoaded && (authMode === 'clerk' || authMode === 'supabase') && !userId ? (
+          <Pressable
+            onPress={() => router.push('/sign-in')}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
+            style={[
+              styles.card,
+              {
+                backgroundColor: C.dark ? 'rgba(52,211,153,0.12)' : 'rgba(16,185,129,0.12)',
+                padding: 14,
+                marginBottom: 14,
+                borderRadius: 12,
+              },
+            ]}
+          >
+            <Text style={{ fontSize: 16, fontWeight: '600', color: C.primary }}>
+              Sign in
+            </Text>
+            <Text style={{ fontSize: 14, color: C.secondary, marginTop: 4 }}>
+              Save your health profile and scan history to your account.
+            </Text>
+          </Pressable>
+        ) : null}
+
         <View style={styles.header}>
           <Logo size={HEADER_LOGO_SIZE} variant="iconOnly" />
           <View style={{ marginLeft: HEADER_GAP, flexShrink: 1 }}>
