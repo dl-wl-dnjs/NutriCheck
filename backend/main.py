@@ -58,3 +58,21 @@ def on_startup() -> None:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+@app.get("/health/deps")
+def health_deps() -> dict[str, bool | str]:
+    from backend.services.product_api_client import probe_open_food_facts_reachable
+
+    off_ok = probe_open_food_facts_reachable()
+    supa = bool(settings.supabase_jwks_url and str(settings.supabase_jwks_url).strip())
+    deps_ok = off_ok or settings.usda_only_mode
+    return {
+        "status": "ok" if deps_ok else "degraded",
+        "open_food_facts": off_ok,
+        "usda_key_configured": bool(
+            settings.usda_fooddata_api_key and settings.usda_fooddata_api_key.strip().upper() != "DEMO_KEY"
+        ),
+        "usda_only_mode": bool(settings.usda_only_mode),
+        "supabase_jwks_configured": supa,
+        "clerk_jwks_configured": bool(settings.clerk_jwks_url),
+    }
