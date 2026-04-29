@@ -12,6 +12,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    auth_sub: Mapped[str | None] = mapped_column(nullable=True, unique=True)
     email: Mapped[str | None] = mapped_column(nullable=True)
     display_name: Mapped[str | None] = mapped_column(nullable=True)
 
