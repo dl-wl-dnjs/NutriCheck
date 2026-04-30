@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ALLERGEN_OPTIONS, FITNESS_GOAL_OPTIONS, HEALTH_CONDITION_OPTIONS } from '../constants/profileOptions';
-import { useProfile, useUpdateProfile } from '../app/lib/hooks/useProfile';
+import { useProfile, useUpdateProfile } from '../lib/hooks/useProfile';
 
 function stableSnapshot(conditions: string[], allergens: string[], goal: string | null) {
   return JSON.stringify({
