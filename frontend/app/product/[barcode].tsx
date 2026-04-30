@@ -14,9 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScoreRing } from '../../components/ScoreRing';
 import { useAuth } from '../../context/AuthContext';
 import { scoreColor, useScreenTokens } from '../../hooks/useScreenTokens';
-import type { ProductOut, RatingOut } from '../lib/types';
-import { ApiError } from '../lib/api';
-import { useScanByBarcode } from '../lib/hooks/useScan';
+import type { ProductOut, RatingOut } from '../../lib/types';
+import { ApiError } from '../../lib/api';
+import { useScanByBarcode } from '../../lib/hooks/useScan';
 import { buildNutritionGrid } from '../../utils/nutritionGrid';
 
 function allergenBannerText(rating: RatingOut): string | null {
@@ -192,7 +192,7 @@ export default function ProductResultsScreen() {
   const banner = allergenBannerText(rating);
   const grid = buildNutritionGrid(product);
   const ingredients = parseIngredients(product.simplified_summary ?? product.ingredients_text);
-  // Always offer alternatives — even AVOID products (allergen / celiac / top-tier)
+  // Always offer alternatives, even AVOID products (allergen / celiac / top-tier)
   // benefit from a "what can I eat instead?" path.
   const ringProgress = rating.avoid ? 1 : rating.score / 100;
 
