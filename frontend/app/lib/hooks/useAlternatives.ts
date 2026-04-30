@@ -1,12 +1,11 @@
 /**
- * Fetch healthier, same-category alternatives for a scanned product from
- * GET /alternatives/{product_id}. The backend blends local DB candidates with
- * an Open Food Facts category search and scores each with the user's profile.
+ * GET /alternatives/{product_id} (authenticated).
  */
 
 import { useQuery } from '@tanstack/react-query';
 
 import { apiRequest } from '../api';
+import { isLikelyUserUuid } from '../apiRouting';
 import type { AlternativesResponse } from '../types';
 
 export function alternativesQueryKey(userId: string, productId: string, limit: number) {
@@ -22,9 +21,13 @@ export function useAlternatives(
   return useQuery({
     queryKey: alternativesQueryKey(userId, productId ?? '', limit),
     queryFn: () => {
-      const qs = new URLSearchParams({ user_id: userId, limit: String(limit) });
+      const qs = new URLSearchParams({ limit: String(limit) });
+      if (isLikelyUserUuid(userId)) {
+        qs.set('user_id', userId.trim());
+      }
       return apiRequest<AlternativesResponse>(
         `/alternatives/${encodeURIComponent(productId as string)}?${qs.toString()}`,
+        { timeoutMs: 120_000 },
       );
     },
     enabled,
