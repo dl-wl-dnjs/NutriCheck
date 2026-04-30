@@ -1,19 +1,16 @@
-"""POST /scan and GET /scan-history/{user_id} — spec-shaped endpoints used
-by the new React Query frontend.
-
-The legacy endpoints under /api/scan/barcode and /api/scan/history are kept
-in routers/scan_legacy.py until the frontend migration is complete. After
-that they are removed.
-"""
+"""POST /scan and GET /scan-history — authenticated."""
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
+from backend.auth import assert_user_id_matches_client, get_current_user
+from backend.config import settings
 from backend.database import get_db
 from backend.models.health_profile import HealthProfile
 from backend.models.product import Product
@@ -33,25 +30,21 @@ from backend.services.scoring import ScoreResult, evaluate
 router = APIRouter(tags=["scan"])
 
 
-def _get_or_create_user(db: Session, user_id: UUID) -> User:
-    user = db.get(User, user_id)
-    if user is not None:
-        return user
-    user = User(id=user_id)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+def _assert_path_user(user: User, user_id: UUID) -> None:
+    assert_user_id_matches_client(
+        user,
+        user_id,
+        detail="Cannot access another user's scan data",
+    )
 
 
 def _get_or_create_product(db: Session, barcode: str) -> Product | None:
     existing = db.scalar(select(Product).where(Product.barcode == barcode))
     if existing is not None:
-        # Backfill the image for products that were cached before image_url existed,
-        # so previously-scanned items start rendering a photo without forcing a
-        # full rescan from the client.
         needs_backfill = existing.source == "openfoodfacts" and (
-            existing.image_url in (None, "") or not existing.categories_tags
+            existing.image_url in (None, "")
+            or not existing.categories_tags
+            or (not existing.allergens_tags and not existing.allergen_statement)
         )
         if needs_backfill:
             payload = fetch_product(barcode)
@@ -60,6 +53,13 @@ def _get_or_create_product(db: Session, barcode: str) -> Product | None:
                     existing.image_url = payload["image_url"]
                 if not existing.categories_tags and payload.get("categories_tags"):
                     existing.categories_tags = payload["categories_tags"]
+                if not existing.allergens_tags and not existing.allergen_statement:
+                    if payload.get("allergens_tags"):
+                        existing.allergens_tags = payload["allergens_tags"]
+                    if payload.get("traces_tags"):
+                        existing.traces_tags = payload["traces_tags"]
+                    if payload.get("allergen_statement"):
+                        existing.allergen_statement = payload["allergen_statement"]
                 db.add(existing)
                 db.commit()
                 db.refresh(existing)
@@ -77,6 +77,9 @@ def _get_or_create_product(db: Session, barcode: str) -> Product | None:
         simplified_summary=payload.get("simplified_summary"),
         image_url=payload.get("image_url"),
         categories_tags=payload.get("categories_tags"),
+        allergen_statement=payload.get("allergen_statement"),
+        allergens_tags=payload.get("allergens_tags"),
+        traces_tags=payload.get("traces_tags"),
         limited_data=bool(payload.get("limited_data", False)),
         source=payload.get("source", "unknown"),
     )
@@ -115,34 +118,42 @@ def _product_out(p: Product) -> ProductOut:
 
 
 @router.post("/scan", response_model=ScanResponse)
-def post_scan(body: ScanRequest, db: Session = Depends(get_db)) -> ScanResponse:
-    user_uuid = UUID(body.user_id)
-    _get_or_create_user(db, user_uuid)
-
-    profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == user_uuid))
+def post_scan(
+    body: ScanRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> ScanResponse:
+    assert_user_id_matches_client(
+        user,
+        body.user_id,
+        detail="user_id does not match authenticated user",
+    )
+    profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == user.id))
     if profile is None:
         raise HTTPException(
             status_code=409,
-            detail="Health profile is required before scanning. PUT /profile/{user_id} first.",
+            detail="Health profile is required before scanning. PUT /profile first.",
         )
 
     product = _get_or_create_product(db, body.barcode)
     if product is None:
-        raise HTTPException(status_code=404, detail="Product not in database")
+        src = "USDA FoodData Central (Branded)" if settings.usda_only_mode else "Open Food Facts or USDA"
+        raise HTTPException(
+            status_code=404,
+            detail=f"Product not found in {src} for this barcode.",
+        )
 
     result = evaluate(profile, product)
     rating = _score_to_rating(result)
 
-    # One scan_history row per (user_id, product_id) — re-scanning bumps the
-    # existing row to the top of Recent Scans rather than stacking duplicates.
     entry = db.scalar(
         select(ScanHistory)
-        .where(ScanHistory.user_id == user_uuid)
+        .where(ScanHistory.user_id == user.id)
         .where(ScanHistory.product_id == product.id)
     )
     if entry is None:
         entry = ScanHistory(
-            user_id=user_uuid,
+            user_id=user.id,
             product_id=product.id,
             barcode=body.barcode,
             score=rating.score,
@@ -182,28 +193,24 @@ def _label_for(score: int) -> str:
     return "Poor"
 
 
-@router.get("/scan-history/{user_id}", response_model=ScanHistoryResponse)
+@router.get("/scan-history", response_model=ScanHistoryResponse)
 def get_scan_history(
-    user_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(default=10, ge=1, le=50),
-    db: Session = Depends(get_db),
 ) -> ScanHistoryResponse:
     rows = (
         db.scalars(
             select(ScanHistory)
             .options(joinedload(ScanHistory.product))
-            .where(ScanHistory.user_id == user_id)
+            .where(ScanHistory.user_id == user.id)
             .order_by(ScanHistory.created_at.desc())
             .limit(limit)
         )
         .unique()
         .all()
     )
-    # Re-evaluate every entry against the user's *current* profile so changing
-    # your health conditions / allergens / goals immediately reshapes the row.
-    # When the profile is gone or the product has been deleted we fall back to
-    # the stored snapshot so the UI never shows a blank tile.
-    profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == user_id))
+    profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == user.id))
     items: list[ScanHistoryItemOut] = []
     for r in rows:
         if r.product is not None and profile is not None:
@@ -229,3 +236,14 @@ def get_scan_history(
             )
         )
     return ScanHistoryResponse(items=items)
+
+
+@router.get("/scan-history/{user_id}", response_model=ScanHistoryResponse)
+def get_scan_history_scoped(
+    user_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    limit: int = Query(default=10, ge=1, le=50),
+) -> ScanHistoryResponse:
+    _assert_path_user(user, user_id)
+    return get_scan_history(db=db, user=user, limit=limit)
