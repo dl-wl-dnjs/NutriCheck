@@ -1,43 +1,30 @@
 /**
- * Free-text product search against GET /search. Results are personalized —
- * each item carries a score computed with the caller's health profile — and
- * cached per (userId, query) so rapid retypes don't hammer the backend.
+ * GET /search — authenticated; results scored for the current profile.
  */
 
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { apiRequest } from '../api';
+import { isLikelyUserUuid } from '../apiRouting';
 import type { SearchResponse } from '../types';
-
-function useDebouncedValue<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const handle = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(handle);
-  }, [value, delay]);
-  return debounced;
-}
 
 export function searchQueryKey(userId: string, query: string, limit: number) {
   return ['search', userId, query, limit] as const;
 }
 
 export function useSearch(userId: string, query: string, limit: number = 20) {
-  const debounced = useDebouncedValue(query.trim(), 300);
-  const enabled = userId.length > 0 && debounced.length >= 2;
+  const q = query.trim();
+  const enabled = userId.length > 0 && q.length >= 2;
   return useQuery({
-    queryKey: searchQueryKey(userId, debounced, limit),
+    queryKey: searchQueryKey(userId, q, limit),
     queryFn: () => {
-      const qs = new URLSearchParams({
-        q: debounced,
-        user_id: userId,
-        limit: String(limit),
-      });
+      const qs = new URLSearchParams({ q, limit: String(limit) });
+      if (isLikelyUserUuid(userId)) {
+        qs.set('user_id', userId.trim());
+      }
       return apiRequest<SearchResponse>(`/search?${qs.toString()}`);
     },
     enabled,
     staleTime: 60_000,
-    placeholderData: keepPreviousData,
   });
 }
