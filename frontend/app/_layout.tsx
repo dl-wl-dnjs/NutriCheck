@@ -1,21 +1,47 @@
 import 'react-native-reanimated';
 
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AuthProvider } from '../context/AuthContext';
+import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import { useScreenTokens } from '../hooks/useScreenTokens';
-import { AppQueryProvider } from './lib/QueryProvider';
+import { AppQueryProvider } from '../lib/QueryProvider';
 
 const WEB_IPHONE_PREVIEW_WIDTH = 393;
+
+/** When using Supabase or Clerk, send logged-out users to sign-in (dev mode skips this). */
+function AuthRouteSync() {
+  const { authMode, userId, isLoaded } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoaded || authMode === 'dev') {
+      return;
+    }
+    const top = segments[0];
+    const inAuthFlow = top === 'sign-in' || top === 'sign-up';
+
+    if (!userId && !inAuthFlow) {
+      router.replace('/sign-in');
+    } else if (userId && inAuthFlow) {
+      router.replace('/(tabs)');
+    }
+  }, [authMode, userId, isLoaded, segments, router]);
+
+  return null;
+}
 
 function ThemedStack() {
   const C = useScreenTokens();
 
   const stack = (
     <>
+      <AuthRouteSync />
       <StatusBar style={C.dark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
@@ -33,6 +59,14 @@ function ThemedStack() {
         <Stack.Screen name="product/[barcode]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="alternatives/[productId]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="ingredient/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen
+          name="sign-in"
+          options={{ animation: 'slide_from_right', gestureEnabled: false, fullScreenGestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="sign-up"
+          options={{ animation: 'slide_from_right', gestureEnabled: false, fullScreenGestureEnabled: false }}
+        />
       </Stack>
     </>
   );
@@ -50,13 +84,15 @@ function ThemedStack() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <AppQueryProvider>
-        <AuthProvider>
-          <ThemedStack />
-        </AuthProvider>
-      </AppQueryProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppQueryProvider>
+          <AuthProvider>
+            <ThemedStack />
+          </AuthProvider>
+        </AppQueryProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 

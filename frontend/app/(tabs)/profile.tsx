@@ -1,5 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import { AlertCircle, Check, ChevronLeft, Lock, Moon, Palette, Sun } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -90,10 +91,11 @@ function SectionHeading({
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const C = useScreenTokens();
   const { preference, setPreference } = useTheme();
-  const { userId } = useAuth();
+  const { userId, authMode, signOut } = useAuth();
   const hp = useHealthProfileEditor(userId);
   const allowLeave = useRef(false);
   const hpRef = useRef(hp);
@@ -332,6 +334,52 @@ export default function ProfileScreen() {
               })}
             </View>
           </View>
+
+          {(authMode === 'clerk' || authMode === 'supabase') && userId ? (
+            <>
+              <View style={{ height: 32 }} />
+              <View>
+                <SectionHeading
+                  title="Account"
+                  subtitle="Signed in on this device"
+                  primary={C.primary}
+                  secondary={C.secondary}
+                />
+                <Pressable
+                  onPress={() => {
+                    void (async () => {
+                      await signOut();
+                      if (authMode === 'supabase' || authMode === 'clerk') {
+                        router.replace('/sign-in');
+                      }
+                    })();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign out"
+                  style={[
+                    styles.optionRow,
+                    {
+                      backgroundColor: C.elevated,
+                      borderColor: 'transparent',
+                    },
+                    C.shadow,
+                  ]}
+                >
+                  <Lock size={18} color={C.primary} strokeWidth={2} />
+                  <Text
+                    style={{
+                      fontSize: 17,
+                      fontWeight: '600',
+                      color: C.primary,
+                      marginLeft: 12,
+                    }}
+                  >
+                    Sign out
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
 
           <View style={{ height: 32 }} />
 

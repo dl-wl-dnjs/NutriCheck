@@ -1,9 +1,22 @@
 /**
- * Central fetch wrapper for the NutriCheck API: base URL from EXPO_PUBLIC_API_URL,
- * JSON defaults, timeout via AbortController, and typed errors for React Query.
+ * Central fetch wrapper: base URL from EXPO_PUBLIC_API_URL, optional auth headers
+ * from setAuthHeadersFactory (Clerk JWT or dev UUID bearer).
  */
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+type AuthHeadersFn = () => Promise<Record<string, string | undefined>>;
+
+let authHeadersFactory: AuthHeadersFn = async () => {
+  const id =
+    process.env.EXPO_PUBLIC_DEV_USER_ID?.trim() || 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+  return { Authorization: `Bearer ${id}` };
+};
+
+/** Called from AuthContext / Clerk bridge so every request sends Authorization. */
+export function setAuthHeadersFactory(fn: AuthHeadersFn): void {
+  authHeadersFactory = fn;
+}
 
 function baseUrl(): string {
   const raw = process.env.EXPO_PUBLIC_API_URL;
@@ -62,6 +75,11 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     }
   }
 
+  const rawAuth = await authHeadersFactory();
+  const authHeaders = Object.fromEntries(
+    Object.entries(rawAuth).filter(([, v]) => v != null && String(v).trim() !== ''),
+  ) as Record<string, string>;
+
   try {
     const res = await fetch(`${baseUrl()}${path.startsWith('/') ? path : `/${path}`}`, {
       ...rest,
@@ -69,6 +87,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       headers: {
         Accept: 'application/json',
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...authHeaders,
         ...headers,
       },
       body: body === undefined ? undefined : JSON.stringify(body),

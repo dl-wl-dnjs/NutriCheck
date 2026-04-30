@@ -101,8 +101,11 @@ export default function AlternativesScreen() {
         {navBar}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator color={C.green} size="large" />
-          <Text style={{ color: C.secondary, marginTop: 16 }}>
-            Finding healthier alternatives…
+          <Text style={{ color: C.secondary, marginTop: 16, textAlign: 'center', paddingHorizontal: 24 }}>
+            Finding healthier alternatives…{'\n'}
+            <Text style={{ fontSize: 13, color: C.tertiary }}>
+              First load may take up to a minute while we match similar products.
+            </Text>
           </Text>
         </View>
       </SafeAreaView>
@@ -147,7 +150,7 @@ export default function AlternativesScreen() {
           <Text style={[styles.emptyTitle, { color: C.primary }]}>No alternatives found</Text>
           <Text style={[styles.emptyBody, { color: C.secondary }]}>
             {note ??
-              `We couldn't find better-scoring options for ${titleName} right now.`}
+              `We couldn't find healthier same-category foods for ${titleName} right now.`}
           </Text>
           <Pressable
             onPress={() => router.back()}
@@ -306,8 +309,8 @@ export default function AlternativesScreen() {
             paddingTop: 4,
           }}
         >
-          Alternatives are ranked by how well they match your health conditions, allergens, and
-          fitness goal.
+          Each alternative is a healthier food in the same category, scored for your health
+          profile (conditions, allergens, and fitness goal).
         </Text>
       </ScrollView>
     </SafeAreaView>
