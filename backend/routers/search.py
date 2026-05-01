@@ -11,15 +11,18 @@ Strategy mirrors ``/alternatives``:
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.auth import assert_user_id_matches_client, get_current_user
 from backend.database import get_db
 from backend.models.health_profile import HealthProfile
 from backend.models.product import Product
+from backend.models.user import User
 from backend.schemas.scan_v2 import ProductOut, RatingOut
 from backend.schemas.search import SearchResponse, SearchResultItem
 from backend.services.product_api_client import fetch_open_food_facts_by_name
@@ -69,6 +72,16 @@ def _ingest_off_payload(db: Session, payload: dict) -> Product | None:
         if not existing.categories_tags and payload.get("categories_tags"):
             existing.categories_tags = payload["categories_tags"]
             changed = True
+        if (not existing.allergens_tags and not existing.allergen_statement) and (
+            payload.get("allergens_tags") or payload.get("traces_tags") or payload.get("allergen_statement")
+        ):
+            if payload.get("allergen_statement"):
+                existing.allergen_statement = payload["allergen_statement"]
+            if payload.get("allergens_tags"):
+                existing.allergens_tags = payload["allergens_tags"]
+            if payload.get("traces_tags"):
+                existing.traces_tags = payload["traces_tags"]
+            changed = True
         if changed:
             db.add(existing)
             db.commit()
@@ -87,6 +100,9 @@ def _ingest_off_payload(db: Session, payload: dict) -> Product | None:
         simplified_summary=payload.get("simplified_summary"),
         image_url=payload.get("image_url"),
         categories_tags=payload.get("categories_tags"),
+        allergen_statement=payload.get("allergen_statement"),
+        allergens_tags=payload.get("allergens_tags"),
+        traces_tags=payload.get("traces_tags"),
         limited_data=bool(payload.get("limited_data", False)),
         source=payload.get("source", "openfoodfacts"),
     )
@@ -98,16 +114,22 @@ def _ingest_off_payload(db: Session, payload: dict) -> Product | None:
 
 @router.get("/search", response_model=SearchResponse)
 def search_products(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
     q: str = Query(..., min_length=2, max_length=120),
-    user_id: UUID = Query(...),
     limit: int = Query(default=20, ge=1, le=40),
-    db: Session = Depends(get_db),
+    user_id: UUID | None = Query(default=None, description="Optional; must match Bearer user when set."),
 ) -> SearchResponse:
-    profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == user_id))
+    assert_user_id_matches_client(
+        user,
+        user_id,
+        detail="user_id does not match authenticated user",
+    )
+    profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == user.id))
     if profile is None:
         raise HTTPException(
             status_code=409,
-            detail="Health profile is required. PUT /profile/{user_id} first.",
+            detail="Health profile is required. PUT /profile first.",
         )
 
     query_text = q.strip()
