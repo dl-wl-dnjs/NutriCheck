@@ -1,4 +1,4 @@
-"""Schemas for the new POST /scan and GET /scan-history/{user_id} endpoints."""
+"""Schemas for POST /scan and GET /scan-history (authenticated)."""
 
 from __future__ import annotations
 
@@ -10,14 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ScanRequest(BaseModel):
-    user_id: str
     barcode: str = Field(..., min_length=4, max_length=32)
-
-    @field_validator("user_id")
-    @classmethod
-    def _user_uuid(cls, v: str) -> str:
-        UUID(v)
-        return v
+    """Ignored if present; auth user is canonical. Kept for older mobile builds."""
+    user_id: UUID | None = None
 
     @field_validator("barcode")
     @classmethod
