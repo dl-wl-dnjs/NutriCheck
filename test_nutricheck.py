@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-# ── Scoring imports ───────────────────────────────────────────────────────────
+# Scoring imports 
 from backend.services.scoring import (
     _allergen_matches,
     _has_token,
@@ -21,18 +21,33 @@ from backend.services.scoring import (
     evaluate,
 )
 
-# ── Schema imports ────────────────────────────────────────────────────────────
+#  Schema imports 
 from backend.schemas.scan_v2 import ScanRequest
 from backend.schemas.profile import ProfileUpsertRequest, _normalize_string_list
 from backend.schemas.health_profile import HealthProfileCreateRequest
 
-# ── Rating service imports ────────────────────────────────────────────────────
+# Rating service imports 
+from backend.services import nutriscore_compute
+from backend.services.product_api_client import (
+    filled_macro_field_count,
+    merge_nutriments_for_richness,
+)
 from backend.services.rating_service import evaluate_product, _score_from_nutrients
+from backend.services.alternative_peers import (
+    beverage_peer_compatible,
+    dedupe_products_by_barcode,
+    filter_peer_candidates,
+    filter_peer_last_resort_same_aisle,
+    meaningful_tag_overlap,
+    peer_match_any_target_specific_tag,
+    peer_match_relaxed,
+    peer_match_strict,
+    pick_parent_category_tag,
+)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 # Helpers — build mock HealthProfile and Product without hitting the database
-# ─────────────────────────────────────────────────────────────────────────────
 
 def make_profile(conditions=None, allergens=None, goal="maintenance"):
     profile = MagicMock()
@@ -48,6 +63,11 @@ def make_product(
     nutriments=None,
     category="",
     limited_data=False,
+    categories_tags=None,
+    barcode="0000000000000",
+    allergen_statement=None,
+    allergens_tags=None,
+    traces_tags=None,
 ):
     product = MagicMock()
     product.name = name
@@ -55,12 +75,15 @@ def make_product(
     product.nutriments = nutriments or {}
     product.category = category
     product.limited_data = limited_data
+    product.categories_tags = categories_tags
+    product.barcode = barcode
+    product.allergen_statement = allergen_statement
+    product.allergens_tags = allergens_tags
+    product.traces_tags = traces_tags
     return product
 
 
-# =============================================================================
 # SECTION 1: _to_float
-# =============================================================================
 
 class TestToFloat:
     def test_none_returns_none(self):
@@ -82,9 +105,7 @@ class TestToFloat:
         assert _to_float(0) == 0.0
 
 
-# =============================================================================
 # SECTION 2: _has_token
-# =============================================================================
 
 class TestHasToken:
     def test_found_in_haystack(self):
@@ -103,9 +124,9 @@ class TestHasToken:
         assert _has_token("", "peanut") is False
 
 
-# =============================================================================
+
 # SECTION 3: _tier_for_score
-# =============================================================================
+
 
 class TestTierForScore:
     def test_score_70_is_good(self):
@@ -127,9 +148,8 @@ class TestTierForScore:
         assert _tier_for_score(0) == "bad"
 
 
-# =============================================================================
+
 # SECTION 4: _label_for_score
-# =============================================================================
 
 class TestLabelForScore:
     def test_80_plus_is_excellent(self):
@@ -151,9 +171,9 @@ class TestLabelForScore:
         assert _label_for_score(0) == "Poor"
 
 
-# =============================================================================
+
 # SECTION 5: _nutriscore_to_base
-# =============================================================================
+
 
 class TestNutriscoreToBase:
     def test_grade_a(self):
@@ -181,47 +201,52 @@ class TestNutriscoreToBase:
         assert _nutriscore_to_base("z") is None
 
 
-# =============================================================================
+
 # SECTION 6: _allergen_matches
-# =============================================================================
+
 
 class TestAllergenMatches:
     def test_direct_peanut_match(self):
-        result = _allergen_matches(["peanut"], "contains peanut butter", "snacks")
+        result = _allergen_matches(["peanut"], "contains peanut butter snacks")
         assert "peanut" in result
 
     def test_synonym_match_gluten_via_wheat(self):
-        result = _allergen_matches(["gluten"], "made with wheat flour", "cereals")
+        result = _allergen_matches(["gluten"], "made with wheat flour cereals")
         assert "gluten" in result
 
     def test_no_match(self):
-        result = _allergen_matches(["peanut"], "contains almonds and cashews", "snacks")
+        result = _allergen_matches(["peanut"], "contains almonds and cashews snacks")
         assert result == []
 
     def test_empty_allergens(self):
-        result = _allergen_matches([], "contains peanut butter", "snacks")
+        result = _allergen_matches([], "contains peanut butter snacks")
         assert result == []
 
     def test_dairy_synonym_via_milk(self):
-        result = _allergen_matches(["dairy"], "ingredients: milk, sugar, cocoa", "chocolate")
+        result = _allergen_matches(["dairy"], "ingredients: milk, sugar, cocoa chocolate")
         assert "dairy" in result
 
     def test_sesame_via_tahini(self):
-        result = _allergen_matches(["sesame"], "contains tahini paste", "spreads")
+        result = _allergen_matches(["sesame"], "contains tahini paste spreads")
         assert "sesame" in result
 
     def test_deduplication(self):
-        result = _allergen_matches(["peanut", "peanut"], "contains peanut", "snacks")
+        result = _allergen_matches(["peanut", "peanut"], "contains peanut snacks")
         assert result.count("peanut") == 1
 
     def test_case_insensitive_ingredient(self):
-        result = _allergen_matches(["peanut"], "Contains PEANUT BUTTER", "snacks")
+        result = _allergen_matches(["peanut"], "Contains PEANUT BUTTER snacks")
         assert "peanut" in result
 
+    def test_off_allergen_tags_peanuts(self):
+        text = "en:peanuts en:gluten"
+        result = _allergen_matches(["Peanuts"], text)
+        assert "Peanuts" in result
 
-# =============================================================================
+
+
 # SECTION 7: evaluate (scoring.py) — allergen and celiac hard stops
-# =============================================================================
+
 
 class TestEvaluateAllergenAvoid:
     def test_peanut_allergen_returns_avoid(self):
@@ -265,10 +290,17 @@ class TestEvaluateAllergenAvoid:
         assert result.avoid is True
         assert "sesame" in result.avoid_reason.lower()
 
+    def test_peanuts_from_off_tags_not_only_ingredients(self):
+        profile = make_profile(allergens=["Peanuts"])
+        product = make_product(ingredients_text="sugar, palm oil, skim milk", allergens_tags=["en:peanuts"])
+        result = evaluate(profile, product)
+        assert result.avoid is True
+        assert "Peanuts" in result.avoid_reason
 
-# =============================================================================
+
+
 # SECTION 8: evaluate — nutrient-based scoring
-# =============================================================================
+
 
 class TestEvaluateNutrientScoring:
     def test_high_sodium_deducts_points(self):
@@ -320,9 +352,8 @@ class TestEvaluateNutrientScoring:
         assert result.score >= 0
 
 
-# =============================================================================
+
 # SECTION 9: evaluate — condition-specific penalties
-# =============================================================================
 
 class TestEvaluateConditionPenalties:
     def test_diabetes_high_sugar_extra_penalty(self):
@@ -350,9 +381,9 @@ class TestEvaluateConditionPenalties:
         assert result_cholesterol.score < result_base.score
 
 
-# =============================================================================
+
 # SECTION 10: evaluate — fitness goal bonuses
-# =============================================================================
+
 
 class TestEvaluateFitnessGoalBonuses:
     def test_muscle_gain_high_protein_bonus(self):
@@ -384,9 +415,9 @@ class TestEvaluateFitnessGoalBonuses:
         assert any("protein" in w.lower() for w in result.warnings)
 
 
-# =============================================================================
+
 # SECTION 11: evaluate — tier and label outputs
-# =============================================================================
+
 
 class TestEvaluateTierAndLabel:
     def test_good_tier_has_positive_recommendation(self):
@@ -415,9 +446,9 @@ class TestEvaluateTierAndLabel:
         assert result.label != "AVOID"
 
 
-# =============================================================================
+
 # SECTION 12: ProfileUpsertRequest schema validation
-# =============================================================================
+
 
 class TestProfileUpsertRequest:
     def test_valid_request_passes(self):
@@ -478,44 +509,31 @@ class TestProfileUpsertRequest:
             )
 
 
-# =============================================================================
+
 # SECTION 13: ScanRequest schema validation
-# =============================================================================
+
 
 class TestScanRequest:
     def test_valid_request(self):
-        req = ScanRequest(
-            user_id=str(uuid.uuid4()),
-            barcode="0123456789012",
-        )
+        req = ScanRequest(barcode="0123456789012")
         assert len(req.barcode) >= 4
 
-    def test_invalid_user_id_raises(self):
-        with pytest.raises(ValidationError):
-            ScanRequest(user_id="not-a-uuid", barcode="1234567890123")
-
     def test_non_numeric_barcode_stripped(self):
-        req = ScanRequest(
-            user_id=str(uuid.uuid4()),
-            barcode="012-345-678",
-        )
+        req = ScanRequest(barcode="012-345-678")
         assert "-" not in req.barcode
 
     def test_barcode_too_short_after_cleaning_raises(self):
         with pytest.raises(ValidationError):
-            ScanRequest(user_id=str(uuid.uuid4()), barcode="12")
+            ScanRequest(barcode="12")
 
     def test_barcode_with_spaces_cleaned(self):
-        req = ScanRequest(
-            user_id=str(uuid.uuid4()),
-            barcode="0123 4567 8901",
-        )
+        req = ScanRequest(barcode="0123 4567 8901")
         assert " " not in req.barcode
 
 
-# =============================================================================
+
 # SECTION 14: HealthProfileCreateRequest schema validation
-# =============================================================================
+
 
 class TestHealthProfileCreateRequest:
     def test_valid_request(self):
@@ -557,9 +575,9 @@ class TestHealthProfileCreateRequest:
         assert "diabetes" in req.health_conditions
 
 
-# =============================================================================
+
 # SECTION 15: _normalize_string_list (profile schema helper)
-# =============================================================================
+
 
 class TestNormalizeStringList:
     def test_removes_empty_strings(self):
@@ -583,9 +601,9 @@ class TestNormalizeStringList:
         assert result[0] == "peanut"
 
 
-# =============================================================================
+
 # SECTION 16: rating_service._score_from_nutrients
-# =============================================================================
+
 
 class TestScoreFromNutrients:
     def test_high_sodium_deducts(self):
@@ -623,9 +641,9 @@ class TestScoreFromNutrients:
         assert score_loss < score_base
 
 
-# =============================================================================
+
 # SECTION 17: rating_service.evaluate_product
-# =============================================================================
+
 
 class TestEvaluateProduct:
     def test_allergen_match_returns_avoid(self):
@@ -651,6 +669,7 @@ class TestEvaluateProduct:
     def test_excellent_label_for_high_score(self):
         profile = make_profile()
         product = make_product(nutriments={
+            "nutrition-score-grade": "a",
             "sodium_100g": 0.05,
             "sugars_100g": 1.0,
             "saturated-fat_100g": 0.2,
@@ -666,3 +685,237 @@ class TestEvaluateProduct:
             "sodium" in w.lower() or "hypertension" in w.lower()
             for w in result.warnings
         )
+
+
+
+# SECTION 18: nutriscore_compute + computed evaluate path
+
+
+
+class TestNutriscoreCompute:
+    def test_can_run_requires_core_negative_fields(self):
+        assert nutriscore_compute.can_run({}) is False
+        assert nutriscore_compute.can_run({"energy-kcal_100g": 100}) is False
+
+    def test_beverage_category_uses_beverage_tables(self):
+        panel = {
+            "energy-kcal_100g": 40,
+            "sugars_100g": 8,
+            "saturated-fat_100g": 0,
+            "sodium_100g": 0.01,
+        }
+        assert nutriscore_compute.can_run(panel) is True
+        assert nutriscore_compute.can_run(panel, categories_tags=["en:beverages"]) is True
+
+    def test_oats_scores_better_than_sugary_drink_panel(self):
+        cola = {
+            "energy-kcal_100g": 42,
+            "sugars_100g": 10.6,
+            "saturated-fat_100g": 0,
+            "sodium_100g": 0.001,
+            "fiber_100g": 0,
+            "proteins_100g": 0,
+        }
+        oats = {
+            "energy-kcal_100g": 389,
+            "sugars_100g": 1.0,
+            "saturated-fat_100g": 1.5,
+            "sodium_100g": 0.002,
+            "fiber_100g": 10.0,
+            "proteins_100g": 13.0,
+        }
+        s_cola, _, _ = nutriscore_compute.score_0_100(cola, categories_tags=["en:beverages"])
+        s_oats, _, _ = nutriscore_compute.score_0_100(oats)
+        assert s_oats > s_cola
+
+    def test_fns_to_grade_boundaries(self):
+        assert nutriscore_compute.fns_to_grade(-2) == "a"
+        assert nutriscore_compute.fns_to_grade(0) == "b"
+        assert nutriscore_compute.fns_to_grade(10) == "c"
+        assert nutriscore_compute.fns_to_grade(18) == "d"
+        assert nutriscore_compute.fns_to_grade(19) == "e"
+
+    def test_fns_to_grade_beverage_bridges_high_fns(self):
+        assert nutriscore_compute.fns_to_grade_beverage(1) == "b"
+        assert nutriscore_compute.fns_to_grade_beverage(7) == "d"
+        assert nutriscore_compute.fns_to_grade_beverage(19) == "e"
+
+
+class TestEvaluateComputedNutriscore:
+    def test_computed_overrides_misleading_letter_when_panel_complete(self):
+        profile = make_profile()
+        product = make_product(
+            nutriments={
+                "nutrition-score-grade": "a",
+                "energy-kcal_100g": 550,
+                "sugars_100g": 55,
+                "saturated-fat_100g": 25,
+                "sodium_100g": 2.0,
+                "fiber_100g": 0,
+                "proteins_100g": 2,
+            }
+        )
+        result = evaluate(profile, product)
+        assert result.score <= 45
+
+    def test_beverage_uses_computed_nutriscore_not_off_letter(self):
+        profile = make_profile()
+        product = make_product(
+            categories_tags=["en:beverages"],
+            nutriments={
+                "nutrition-score-grade": "c",
+                "energy-kcal_100g": 40,
+                "sugars_100g": 8,
+                "saturated-fat_100g": 0,
+                "sodium_100g": 0.01,
+            },
+        )
+        result = evaluate(profile, product)
+        assert result.score == 45
+
+    def test_plain_water_is_high_score(self):
+        profile = make_profile()
+        product = make_product(categories_tags=["en:waters", "en:beverages"], nutriments={})
+        result = evaluate(profile, product)
+        assert result.score >= 85
+
+
+
+# SECTION 19: alternative_peers (category gating for /alternatives)
+
+
+
+class TestAlternativePeers:
+    def test_broad_only_overlap_is_not_meaningful(self):
+        gummy = make_product(
+            categories_tags=["en:snacks", "en:sweets", "en:gummy-candies"],
+            barcode="1",
+        )
+        spread = make_product(
+            categories_tags=["en:snacks", "en:sweets", "en:chocolate-spreads"],
+            barcode="2",
+        )
+        assert not meaningful_tag_overlap(gummy, spread)
+
+    def test_shared_specific_tag_is_meaningful(self):
+        a = make_product(categories_tags=["en:sweets", "en:gummy-candies"], barcode="1")
+        b = make_product(categories_tags=["en:sweets", "en:gummy-candies"], barcode="2")
+        assert "en:gummy-candies" in meaningful_tag_overlap(a, b)
+
+    def test_peer_strict_accepts_same_leaf(self):
+        target = make_product(categories_tags=["en:sweets", "en:gummy-candies"], barcode="t")
+        peer = make_product(categories_tags=["en:gummy-candies"], barcode="p")
+        assert peer_match_strict(target, peer) is True
+
+    def test_peer_strict_rejects_chocolate_spread_vs_gummy(self):
+        target = make_product(categories_tags=["en:sweets", "en:gummy-candies"], barcode="t")
+        spread = make_product(categories_tags=["en:chocolate-spreads"], barcode="p")
+        assert peer_match_strict(target, spread) is False
+
+    def test_peer_relaxed_still_requires_non_broad_suffix_overlap(self):
+        target = make_product(
+            categories_tags=["en:snacks", "en:sweets", "en:gummy-candies"],
+            barcode="t",
+        )
+        spread = make_product(categories_tags=["en:snacks", "en:sweets", "en:chocolate-spreads"], barcode="p")
+        assert peer_match_relaxed(target, spread) is False
+
+    def test_dedupe_products_by_barcode(self):
+        a = make_product(barcode="111")
+        b = make_product(barcode="111")
+        c = make_product(barcode="222")
+        assert len(dedupe_products_by_barcode([a, b, c])) == 2
+
+    def test_filter_peer_candidates_drops_cross_category(self):
+        target = make_product(
+            categories_tags=["en:sweets", "en:gummy-candies"],
+            barcode="t",
+        )
+        ok_peer = make_product(categories_tags=["en:gummy-candies", "en:haribo"], barcode="1")
+        bad_peer = make_product(categories_tags=["en:chocolate-spreads"], barcode="2")
+        out = filter_peer_candidates(target, [ok_peer, bad_peer])
+        assert len(out) == 1
+        assert out[0].barcode == "1"
+
+    def test_peer_match_any_specific_tag_outside_suffix(self):
+        """Fallback tier: a specific tag earlier in the chain still counts as a peer."""
+        target = make_product(
+            categories_tags=["en:snacks", "en:sweets", "en:gummy-candies", "en:chewing-gum"],
+            barcode="t",
+        )
+        peer = make_product(categories_tags=["en:sweets", "en:gummy-candies"], barcode="p")
+        assert peer_match_any_target_specific_tag(target, peer) is True
+
+    def test_pick_parent_category_tag(self):
+        tags = ["en:a", "en:b", "en:leaf"]
+        assert pick_parent_category_tag(tags) == "en:b"
+
+    def test_filter_peer_last_resort_same_category_string(self):
+        target = make_product(category="Confectionery", barcode="t", categories_tags=None)
+        a = make_product(category="Confectionery", barcode="1", categories_tags=None)
+        b = make_product(category="Dairy", barcode="2", categories_tags=None)
+        out = filter_peer_last_resort_same_aisle(target, [a, b])
+        assert len(out) == 1 and out[0].barcode == "1"
+
+    def test_beverage_peer_rejects_cola_for_high_protein_shake(self):
+        shake = make_product(
+            categories_tags=["en:beverages", "en:milk-drinks", "en:protein-drinks"],
+            nutriments={"proteins_100g": 8.0},
+            barcode="shake",
+        )
+        cola = make_product(
+            categories_tags=["en:beverages", "en:sodas", "en:colas"],
+            nutriments={"proteins_100g": 0.0},
+            barcode="cola",
+        )
+        assert beverage_peer_compatible(shake, cola) is False
+
+    def test_beverage_peer_accepts_another_protein_style_drink(self):
+        a = make_product(
+            categories_tags=["en:beverages", "en:milk-drinks", "en:protein-drinks"],
+            nutriments={"proteins_100g": 8.0},
+            barcode="a",
+        )
+        b = make_product(
+            categories_tags=["en:beverages", "en:flavoured-milks"],
+            nutriments={"proteins_100g": 6.0},
+            barcode="b",
+        )
+        assert beverage_peer_compatible(a, b) is True
+
+    def test_filter_peer_candidates_drops_soda_for_protein_shake(self):
+        target = make_product(
+            categories_tags=["en:beverages", "en:milk-drinks", "en:protein-drinks"],
+            nutriments={"proteins_100g": 8.0},
+            barcode="t",
+        )
+        cola = make_product(
+            categories_tags=["en:beverages", "en:sodas", "en:colas"],
+            barcode="cola",
+        )
+        milk = make_product(
+            categories_tags=["en:beverages", "en:milk-drinks", "en:flavoured-milks"],
+            barcode="milk",
+        )
+        out = filter_peer_candidates(target, [cola, milk])
+        assert all(p.barcode != "cola" for p in out)
+        assert any(p.barcode == "milk" for p in out)
+
+    def test_weak_category_skipped_for_peer_last_resort(self):
+        target = make_product(category="Beverages", barcode="t", categories_tags=None)
+        a = make_product(category="Beverages", barcode="1", categories_tags=None)
+        out = filter_peer_last_resort_same_aisle(target, [a])
+        assert out == []
+
+
+class TestAlternativesIngestHelpers:
+    def test_merge_nutriments_incoming_richer_keeps_more_fields(self):
+        thin = {"sugars_100g": 10.0}
+        rich = {"sugars_100g": 10.0, "fat_100g": 3.0, "proteins_100g": 5.0}
+        merged = merge_nutriments_for_richness(thin, rich, incoming_is_richer=True)
+        assert merged.get("fat_100g") == 3.0
+        assert merged.get("proteins_100g") == 5.0
+
+    def test_filled_macro_field_count_detects_panel_depth(self):
+        assert filled_macro_field_count({"sugars_100g": 1}) >= 1
+        assert filled_macro_field_count({}) == 0
