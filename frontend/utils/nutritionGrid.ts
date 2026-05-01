@@ -21,11 +21,11 @@ function fmtEnergy(record: Record<string, unknown>): string {
   if (kcal != null) {
     return `${Math.round(kcal)}`;
   }
-  return '—';
+  return '-';
 }
 
 function fmtG(v: number | null): string {
-  return v != null ? v.toFixed(1) : '—';
+  return v != null ? v.toFixed(1) : '-';
 }
 
 export function buildNutritionGrid(product: ProductSummary): NutritionCell[] {
