@@ -1,4 +1,4 @@
-"""Schemas for GET /alternatives/{product_id} — healthier same-category candidates."""
+"""Schemas for GET /alternatives/{product_id}: healthier same-category candidates."""
 
 from __future__ import annotations
 
