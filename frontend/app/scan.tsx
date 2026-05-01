@@ -1,6 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
+import { useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { X, Zap, ZapOff } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -9,6 +10,7 @@ import {
   Alert,
   InputAccessoryView,
   Keyboard,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -28,8 +30,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../context/AuthContext';
-import { ApiError } from './lib/api';
-import { useScan } from './lib/hooks/useScan';
+import { ApiError } from '../lib/api';
+import { useScan } from '../lib/hooks/useScan';
 import { tokens } from '../theme';
 
 const RETICLE_W = 280;
@@ -54,6 +56,7 @@ function isValidUpc(input: string): boolean {
 
 export default function ScanScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { height: winH, width: winW } = useWindowDimensions();
   const { userId } = useAuth();
@@ -159,7 +162,7 @@ export default function ScanScreen() {
     async (rawBarcode: string, opts: { fromCamera: boolean }) => {
       const cleaned = normalizeBarcode(rawBarcode);
       if (!isValidUpc(cleaned)) {
-        const msg = 'Please enter a barcode with 8–13 digits.';
+        const msg = 'Please enter a barcode with 8 to 13 digits.';
         if (opts.fromCamera) {
           Alert.alert('Invalid barcode', msg);
         } else {
@@ -245,14 +248,24 @@ export default function ScanScreen() {
         <Text style={styles.permDeniedBody}>
           Allow NutriCheck to use your camera so we can read product barcodes.
         </Text>
-        <Pressable onPress={requestPermission} style={styles.permBtn}>
+        <Pressable onPress={() => void requestPermission()} style={styles.permBtn}>
           <Text style={styles.permBtnText}>Grant permission</Text>
         </Pressable>
+        {!permission.canAskAgain ? (
+          <Pressable onPress={() => void Linking.openSettings()} style={styles.permBtnSecondary}>
+            <Text style={styles.permBtnSecondaryText}>Open system settings</Text>
+          </Pressable>
+        ) : null}
         <Pressable onPress={() => router.back()} style={styles.permGhost}>
           <Text style={styles.permGhostText}>Cancel</Text>
         </Pressable>
       </View>
     );
+  }
+
+  // Only one camera preview at a time; keep sessions healthy in Expo Go / stack nav.
+  if (!isFocused) {
+    return <View style={styles.root} />;
   }
 
   const darkTokens = tokens.dark;
@@ -271,6 +284,13 @@ export default function ScanScreen() {
         enableTorch={flashOn}
         barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'] }}
         onBarcodeScanned={processing ? undefined : ({ data }) => onBarcode(data)}
+        onMountError={({ message }) => {
+          Alert.alert(
+            'Camera error',
+            message || 'Could not start the camera. On iOS Simulator there is no camera; use a real device, or try closing and reopening the Scan screen.',
+            [{ text: 'OK' }],
+          );
+        }}
       />
 
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -326,7 +346,7 @@ export default function ScanScreen() {
 
         {/*
           Collapsed: whole surface is a Pressable to expand.
-          Expanded: plain View — the Pressable wrapper swallows taps into the
+          Expanded: plain View. The Pressable wrapper swallows taps into the
           TextInput on some devices and silently eats the keyboard-show event.
         */}
         {!sheetExpanded ? (
@@ -357,7 +377,7 @@ export default function ScanScreen() {
                   <Text style={styles.sheetCancel}>Cancel</Text>
                 </Pressable>
               </View>
-              <Text style={styles.sheetSub}>Enter the barcode manually (8–13 digits)</Text>
+              <Text style={styles.sheetSub}>Enter the barcode manually (8 to 13 digits)</Text>
               {manualError ? <Text style={styles.sheetError}>{manualError}</Text> : null}
               <View style={styles.formRow}>
                 <TextInput
@@ -481,6 +501,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   permBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 17 },
+  permBtnSecondary: {
+    marginTop: 12,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permBtnSecondaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '500' },
   permGhost: { marginTop: 12, height: 50, alignItems: 'center', justifyContent: 'center' },
   permGhostText: { color: 'rgba(235,235,245,0.6)', fontSize: 15 },
 
