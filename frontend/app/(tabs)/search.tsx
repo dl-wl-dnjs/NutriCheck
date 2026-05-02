@@ -17,9 +17,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { useAuth } from '../../context/AuthContext';
 import { scoreColor, useScreenTokens } from '../../hooks/useScreenTokens';
-import { useScan } from '../lib/hooks/useScan';
-import { useSearch } from '../lib/hooks/useSearch';
-import type { SearchResultItem } from '../lib/types';
+import { useScan } from '../../lib/hooks/useScan';
+import { useSearch } from '../../lib/hooks/useSearch';
+import type { SearchResultItem } from '../../lib/types';
 
 const PAGE_MARGIN = 16;
 const TAB_BAR_HEIGHT = 49;

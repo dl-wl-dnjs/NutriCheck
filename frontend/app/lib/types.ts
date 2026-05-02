@@ -43,7 +43,6 @@ export interface RatingOut {
 }
 
 export interface ScanRequest {
-  user_id: string;
   barcode: string;
 }
 

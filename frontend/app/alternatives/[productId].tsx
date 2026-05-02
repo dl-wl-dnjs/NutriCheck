@@ -13,8 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '../../context/AuthContext';
 import { scoreColor, useScreenTokens } from '../../hooks/useScreenTokens';
-import { useAlternatives } from '../lib/hooks/useAlternatives';
-import type { AlternativeItem } from '../lib/types';
+import { useAlternatives } from '../../lib/hooks/useAlternatives';
+import type { AlternativeItem } from '../../lib/types';
 import { buildNutritionGrid } from '../../utils/nutritionGrid';
 
 type Alt = AlternativeItem;
