@@ -33,7 +33,7 @@ A mobile app that turns a barcode into a clear, personalized read on what you're
     </td>
     <td align="center" width="33%">
       <img src="frontend/assets/screenshots/search.png" alt="Search" width="260"><br>
-      <sub><b>Search</b><br>Find a product by name — scored for <i>you</i></sub>
+      <sub><b>Search</b><br>Find a product by name scored for <i>you</i></sub>
     </td>
   </tr>
 </table>
@@ -246,6 +246,9 @@ window. See [`backend/main.py`](backend/main.py).
 NutriCheck surfaces public nutrition and ingredient data and flags items based on a user-supplied
 health profile. It is **informational only and is not medical advice**. Please consult a qualified
 clinician for medical, dietary, or allergy decisions.
+
+For the login authentication shown in the demo, please run with your own Supabase API key due to
+sensitivity issues.
 
 ## Credits
 

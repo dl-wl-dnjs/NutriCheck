@@ -154,7 +154,7 @@ def _local_candidates(db: Session, target: Product) -> list[Product]:
         rows = db.scalars(
             select(Product)
             .where(Product.id != target.id)
-            .where(Product.categories_tags.op("?|")(array(list(tags))))  # type: ignore[attr-defined]
+            .where(Product.categories_tags.op("?|")(array(list(tags))))
             .limit(50)
         ).all()
         if rows:
@@ -346,7 +346,7 @@ def _augment_candidates_from_off_name_search(
 ) -> None:
     """Add OFF products found by text search on this item's name (and brand).
 
-    Runs whenever the target has a name — not only when the local pool is small — so
+    Runs whenever the target has a name, not only when the local pool is small, so
     alternatives can surface similar branded or generic matches even with a full DB.
     """
     if not (target.name or "").strip():
