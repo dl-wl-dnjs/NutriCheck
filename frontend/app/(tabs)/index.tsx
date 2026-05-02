@@ -27,8 +27,8 @@ import { Logo } from '../../components/Logo';
 import { RecentScansSkeleton } from '../../components/RecentScansSkeleton';
 import { useAuth } from '../../context/AuthContext';
 import { useScreenTokens } from '../../hooks/useScreenTokens';
-import { useProfile } from '../lib/hooks/useProfile';
-import { useScanHistory } from '../lib/hooks/useScanHistory';
+import { useProfile } from '../../lib/hooks/useProfile';
+import { useScanHistory } from '../../lib/hooks/useScanHistory';
 
 type IconType = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
